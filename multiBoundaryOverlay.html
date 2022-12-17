@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no" />
+    <title>Multi-Boundary Overlay</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/3.34/esri/css/esri.css">
+    <style>
+        html,
+        body,
+        #map {
+            height: 98%;
+            margin: 0;
+            padding: 0;
+        }
+    </style>
+    <script src="https://js.arcgis.com/3.34/"></script>
+    <script>
+            var map;
+            var g_esri = {}
+            require(["esri/map", 
+            "esri/geometry/webMercatorUtils", 
+            "esri/layers/FeatureLayer",
+            "dojo/dom",
+                "dojo/domReady!"], function (
+                    Map, webMercatorUtils, FeatureLayer, dom
+                ) {
+                g_esri.map = new Map("map", {
+                    basemap: "streets-navigation-vector",
+                    center: [-97.91016562499615, 39.504002205197395], // longitude, latitude
+                    zoom: 4,
+                    showAttribution: false,
+                    logo: false
+                });
+				// https://services2.arcgis.com/JoecHEvChY6qFe2m/arcgis/rest/services/usa_zip5/FeatureServer/0
+                g_esri.MultiLayerURLs = [
+                    { name: "State", value: "stateMultiLayer", url: "https://services2.arcgis.com/JoecHEvChY6qFe2m/arcgis/rest/services/USA_States/FeatureServer/0", ScaleRange:[18489297.737236, 4622324.434309] },
+                    /*{name:"Telephone Area Code", value:"telephoneAreaCodeLayer", url:"https://services2.arcgis.com/JoecHEvChY6qFe2m/arcgis/rest/services/USA_Telephone_Area_Codes/FeatureServer/0"},*/
+                    { name: "County", value: "countyMultiLayer", url: "https://services2.arcgis.com/JoecHEvChY6qFe2m/arcgis/rest/services/USA_Counties/FeatureServer/0", ScaleRange:[2311162.217155, 1155581.1085775] },
+                    { name: "Zip3", value: "zip3MultiLayer", url: "https://maps5.arcgisonline.com/arcgis/rest/services/em4c/USZipcodes/MapServer/0", ScaleRange:[577790.5542885, 288895.2771445] },
+                    { name: "Zip", value: "zip5MultiLayer", url: "https://maps5.arcgisonline.com/arcgis/rest/services/em4c/USZipcodes/MapServer/0", ScaleRange:[144447.638572, 36111.909643] }
+                ];
+                g_esri.map.on("load", function(){
+                    /*var stateLayer = new FeatureLayer("https://sampleserver6.arcgisonline.com/arcgis/rest/services/USA/MapServer/2",{
+                        mode: FeatureLayer.MODE_ONDEMAND,
+                        id: "stateLayer"
+                    });
+                    var countyLayer = new FeatureLayer("https://sampleserver6.arcgisonline.com/arcgis/rest/services/USA/MapServer/3",{
+                        mode: FeatureLayer.MODE_ONDEMAND,
+                        id: "countyLayer"
+                    });
+                    var zip3Layer = new FeatureLayer("https://maps5.arcgisonline.com/arcgis/rest/services/em4c/USZip3codes/MapServer/0",{
+                        mode: FeatureLayer.MODE_ONDEMAND,
+                        id: "zip3Layer"
+                    });
+                    var zip5Layer = new FeatureLayer("https://maps5.arcgisonline.com/arcgis/rest/services/em4c/USZipcodes/MapServer/0",{
+                        mode: FeatureLayer.MODE_ONDEMAND,
+                        id: "zip5Layer"
+                    });
+                    stateLayer.setScaleRange(18489297.737236, 4622324.434309);
+                    countyLayer.setScaleRange(2311162.217155, 1155581.1085775); //featureLayer.setScaleRange(minScale, maxScale); //https://sampleserver6.arcgisonline.com/arcgis/rest/services/Census/MapServer/1
+                    zip3Layer.setScaleRange(577790.5542885, 288895.2771445);
+                    zip5Layer.setScaleRange(144447.638572, 36111.909643);
+                    //g_esri.map.addLayers([stateLayer]);
+                    g_esri.map.addLayers([stateLayer, countyLayer, zip3Layer, zip5Layer]);*/
+                });
+                loadData = function (){
+                    console.log('in loadData')
+                    for (var i = 0; i < g_esri.MultiLayerURLs.length; i++){
+                        var featureLayer = new FeatureLayer(g_esri.MultiLayerURLs[i].url,{
+                            mode: FeatureLayer.MODE_ONDEMAND,
+                            id: g_esri.MultiLayerURLs[i].value
+                        })
+                        featureLayer.on("click", onBoundaryClick);
+                        featureLayer.setScaleRange(g_esri.MultiLayerURLs[i].ScaleRange[0], g_esri.MultiLayerURLs[i].ScaleRange[1]);
+                        g_esri.map.addLayer(featureLayer);
+                    }
+                }
+
+                onBoundaryClick = function(evt){
+                    var g = evt.graphic;
+                    g_esri.map.setExtent(g._extent);
+                }
+            });
+    </script>
+</head>
+
+<body>
+    <div id="map">
+    </div>
+    <button onclick="loadData();">Load Data</button>
+</body>
+
+</html>

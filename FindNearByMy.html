@@ -1,0 +1,381 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no" />
+    <title>Find Nearby My</title>
+    <link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/3.4.1/css/bootstrap.min.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/3.27/esri/css/esri.css">
+    <link rel="stylesheet" href="./assets/test.css">
+    <script src="https://js.arcgis.com/3.32/"></script>
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.5.1/jquery.min.js"></script>
+    <script>
+        var app = {};
+
+        require([
+            "esri/map",
+            "esri/toolbars/draw",
+            "esri/layers/FeatureLayer",
+            "esri/layers/GraphicsLayer",
+            "esri/layers/CSVLayer",
+            "esri/Color",
+            "esri/graphic",
+            "esri/geometry/normalizeUtils",
+            "esri/tasks/GeometryService",
+            "esri/tasks/BufferParameters",
+            "esri/symbols/SimpleMarkerSymbol",
+            "esri/symbols/SimpleLineSymbol",
+            "esri/symbols/SimpleFillSymbol",
+            "esri/renderers/SimpleRenderer",
+            "esri/InfoTemplate",
+            "esri/urlUtils",
+            "esri/geometry/Extent",
+            "esri/geometry/Point",
+            "esri/config",
+            "dojo/parser", "dojo/_base/array", "dojo/query",
+            "dojo/dom", "dojo/on",
+            "dojo/domReady!"
+        ], function (
+            EsriMap,
+            Draw,
+            EsriFeatureLayer,
+            EsriGraphicsLayer,
+            EsriCSVLayer,
+            EsriColor,
+            Graphic,
+            normalizeUtils,
+            GeometryService,
+            BufferParameters,
+            EsriSimpleMarkerSymbol,
+            SimpleLineSymbol,
+            SimpleFillSymbol,
+            EsriSimpleRenderer,
+            EsriInfoTemplate,
+            EsriUrlUtils,
+            EsriExtent,
+            Point,
+            esriConfig,
+            parser, array, query,
+            dom, on
+        ) {
+
+            parser.parse();
+
+            app.geometryService = new GeometryService("https://utility.arcgisonline.com/ArcGIS/rest/services/Geometry/GeometryServer");
+
+            esriConfig.defaults.io.proxyUrl = "/proxy/";
+            esriConfig.defaults.io.alwaysUseProxy = false;
+
+            app.objColor = { Account: [0, 69, 238, 0.5], Contact: [0, 238, 69, 0.5], Lead: [238, 69, 0, 0.5], Opportunity: [128, 0, 128, 1.0] }
+            app.title = "${FirstName}"
+            app.content = "Longitude: ${longitude}" + "<br> Latitude: ${latitude}"
+            app.url = { "Account": "./data/Account.csv", "Lead": "./data/Lead.csv", "Contact": "./data/Contact.csv", 'Opportunity': './data/Opportunity.csv' }
+
+            app.sObjectsMetadata = [
+                {
+                    "iconColor": "#7F8DE1",
+                    "iconUrl": "https://valgenpv-dev-ed.my.salesforce.com/img/icon/t4v35/standard/account_120.png",
+                    "label": "Account",
+                    "name": "Account",
+                    "pluralLabel": "Accounts",
+                    "$$hashKey": "object:7"
+                },
+                {
+                    "iconColor": "#F88962",
+                    "iconUrl": "https://valgenpv-dev-ed.my.salesforce.com/img/icon/t4v35/standard/lead_120.png",
+                    "label": "Lead",
+                    "name": "Lead",
+                    "pluralLabel": "Leads",
+                    "$$hashKey": "object:8"
+                },
+                {
+                    "iconColor": "#5a9cdd",
+                    "iconUrl": "https://valgenpv-dev-ed.my.salesforce.com/img/icon/t4v35/custom/custom57_120.png",
+                    "label": "test object",
+                    "name": "Contact",
+                    "pluralLabel": "testobject",
+                    "$$hashKey": "object:9"
+                }
+            ]
+
+            app.map = new EsriMap("map", {
+                basemap: "gray-vector",
+                center: [-87.88393958129747, 41.91399320639942],//[-97.163095312498, 44.40235617969788],
+                zoom: 13,
+                logo: false,
+                showAttribution: false
+            });
+
+            app.map.on('load', function () {
+                createToolbar();
+            });
+
+            GrGeofencingLayer = new EsriGraphicsLayer();
+            app.map.addLayer(GrGeofencingLayer);
+
+            BufferLayer = new EsriGraphicsLayer({
+                id: "BufferLayer"
+            });
+            app.map.addLayer(BufferLayer);
+            var line = new SimpleLineSymbol();
+            line.setStyle(SimpleLineSymbol.STYLE_NULL);
+            line.setWidth(0);
+            var fill = new SimpleFillSymbol();
+            fill.setColor(new EsriColor([237, 235, 164, 150]));
+            fill.setOutline(line);
+
+            var bufferSymbol = new SimpleFillSymbol().setColor(new EsriColor([237, 235, 164, 150]));
+
+            BufferLayer.setRenderer(new EsriSimpleRenderer(fill))
+
+            function createToolbar() {
+                app.toolbar = new Draw(app.map);
+                app.toolbar.on("draw-end", addToMap);
+
+                // event delegation so a click handler is not
+                // needed for each individual button
+                on(dom.byId("draw"), "click", function (evt) {
+                    if (evt.target.id === "draw") {
+                        return;
+                    }
+                    var tool = evt.target.id.toLowerCase();
+                    app.map.disableMapNavigation();
+                    app.toolbar.activate(tool);
+                });
+            }
+
+            function addToMap(evt) {
+                GrGeofencingLayer.clear();
+                BufferLayer.clear();
+                var symbol;
+                app.toolbar.deactivate();
+                app.map.enableMapNavigation();
+                switch (evt.geometry.type) {
+                    case "point":
+                    case "multipoint":
+                        symbol = new EsriSimpleMarkerSymbol();
+                        break;
+                    case "polyline":
+                        symbol = new SimpleLineSymbol();
+                        break;
+                    default:
+                        symbol = new SimpleFillSymbol();
+                        break;
+                }
+                var newGraphic = new Graphic(evt.geometry, symbol);
+                GrGeofencingLayer.add(newGraphic);
+
+                findPointsInExtent(evt.geometry);
+            }
+
+            findPointsInExtent = function (evt) {
+                app.selectedLeads = [];
+                var graphicsLayerLead = app.map.getLayer("Lead");
+                var leadsSet = new Set();
+                if (graphicsLayerLead) {
+                    dojo.forEach(graphicsLayerLead.graphics, function (graphic) {
+                        if (evt.contains(graphic.geometry)) {
+                            leadsSet.add(graphic);
+                        }
+                        app.selectedLeads = Array.from(leadsSet);
+                    });
+                }
+                console.log(app.selectedLeads)
+            }
+
+            clearGraphics = function () {
+                app.map.graphics.clear();
+                GrGeofencingLayer.clear();
+                BufferLayer.clear();
+                document.querySelector("#selectedDistance").selectedIndex = 0;
+            }
+
+            drawBuffer = function (sDistance) {
+                if (sDistance != 'none') {
+                    GrGeofencingLayer.clear();
+                    BufferLayer.clear();
+                    console.log('sDistance ', sDistance)
+                    if (app.selectedLeads.length != 0) {
+                        var params = new BufferParameters();
+                        params.distances = [parseInt(sDistance)];
+                        params.outSpatialReference = app.map.spatialReference;
+                        params.unit = GeometryService['UNIT_METER']
+                        array.forEach(app.selectedLeads, function (graphic) {
+                            params.geometries = [graphic.geometry]
+                            app.geometryService.buffer(params, showBuffer);
+                        });
+                    }
+                    setTimeout(function () {
+                        selectAccounts()
+                    }, 10000);
+                }
+            }
+
+            function showBuffer(bufferedGeometries) {
+                array.forEach(bufferedGeometries, function (geometry) {
+                    var graphic = new Graphic(geometry);
+                    BufferLayer.add(graphic);
+                });
+            }
+
+            function selectAccounts() {
+                console.log('In selectAccounts')
+                app.selectedAccounts = {};
+                var bufferLayer = app.map.getLayer("BufferLayer");
+                var accountLayer = app.map.getLayer("Account");
+                if (bufferLayer) {
+                    dojo.forEach(bufferLayer.graphics, function (bufferGraphic) {
+                        dojo.forEach(accountLayer.graphics, function (graphic) {
+                            if (bufferGraphic.geometry.contains(graphic.geometry)) {
+                                app.selectedAccounts[graphic.attributes.record.AccountId] = graphic
+                            }
+                        })
+                    })
+                }
+                console.log(app.selectedAccounts);
+            }
+
+            $(document).ready(function () {
+                Object.entries(app.url).forEach(function (key) {
+                    var csvJSONData;
+                    $.ajax({
+                        type: "GET",
+                        url: key[1],
+                        dataType: "text",
+                        success: function (data) {
+                            csvJSONData = csvTojs(data, key[0]);
+                        }
+                    });
+                })
+            });
+
+            function csvTojs(csv, objName) {
+                var lines = csv.split("\n");
+                var result = [];
+                var headers = lines[0].split(",");
+
+                for (var i = 1; i < lines.length; i++) {
+                    var obj = {};
+
+                    var row = lines[i],
+                        queryIdx = 0,
+                        startValueIdx = 0,
+                        idx = 0;
+
+                    if (row.trim() === '') { continue; }
+
+                    while (idx < row.length) {
+                        /* if we meet a double quote we skip until the next one */
+                        var c = row[idx];
+
+                        if (c === '"') {
+                            do { c = row[++idx]; } while (c !== '"' && idx < row.length - 1);
+                        }
+
+                        if (c === ',' || /* handle end of line with no comma */ idx === row.length - 1) {
+                            /* we've got a value */
+                            var value = row.substr(startValueIdx, idx - startValueIdx).trim();
+
+                            /* skip first double quote */
+                            if (value[0] === '"') { value = value.substr(1); }
+                            /* skip last comma */
+                            if (value[value.length - 1] === ',') { value = value.substr(0, value.length - 1); }
+                            /* skip last double quote */
+                            if (value[value.length - 1] === '"') { value = value.substr(0, value.length - 1); }
+
+                            var key = headers[queryIdx++];
+                            if (value) {
+                                obj[key] = value;
+                            } else {
+                                obj[key] = null
+                            }
+                            startValueIdx = idx + 1;
+                        }
+
+                        ++idx;
+                    }
+
+                    result.push(obj);
+                }
+                //return result;
+                loadLayers(result, objName)
+            }
+
+            loadLayers = function (layerData, objName) {
+                var graphicsLayer = app.map.getLayer(objName);
+                if (!graphicsLayer) {
+                    graphicsLayer = new EsriGraphicsLayer({
+                        id: objName
+                    });
+                    app.map.addLayer(graphicsLayer);
+                }
+                graphicsLayer.clear();
+                let i = 0;
+                while (i < layerData.length) {
+                    if (parseFloat(layerData[i]["ValgenDev__cfMappLongitude__c"]) || parseFloat(layerData[i]["ValgenDev__cfMappLatitude__c"])) {
+                        var geomPoint = new Point(parseFloat(layerData[i]["ValgenDev__cfMappLongitude__c"]), parseFloat(layerData[i]["ValgenDev__cfMappLatitude__c"]));
+                        //var template = new EsriInfoTemplate(app.title, app.content);
+                        var template = new EsriInfoTemplate(objName, " ");
+                        //var template = new EsriInfoTemplate('', generateTemplateForInfoWindow);
+                        var symbol = new EsriSimpleMarkerSymbol("solid", 10, null, new EsriColor(app.objColor[objName]));
+                        var attributes = {
+                            'ObjName': objName,
+                            'record': layerData[i],
+                            'sObjectData': layerData
+                        }
+                        var graphic = new Graphic(geomPoint, symbol, attributes, template);
+                        graphicsLayer.add(graphic)
+                    }
+                    i++;
+                }
+            }
+
+            function generateTemplateForInfoWindow(graphic) {
+                var html = '<div class="resultList">' + '<ul>';
+                    console.log(graphic.attributes.record)
+                html = html + '<li>' + '<a "target="_blank" class="popup__title">' + "Name: " + graphic.attributes.Record.FirstName + " " + graphic.attributes.Record.LastName + '</a> ';
+                html = html + '	</li> </ul>';
+                html = html + '</div> ';
+                return html;
+            }
+        });
+    </script>
+
+</head>
+
+<body>
+    <div id='cntrlPanel'>
+        <div class='sCntr'>
+            <label>Select <b>'Leads'</b> using tools below to draw a boundary on the map</label>
+            <div id="draw">
+                <button id="Extent">Rectangle</button>
+                <button id="FreehandPolygon">Freehand Polygon</button>
+                <button id="Polygon">Polygon</button>
+            </div>
+            <div data-dojo-attach-point='resultLeads' class='resultLeads'>
+                <label data-dojo-attach-point='leadCountLbl'></label>
+                <button id="Clear" onclick="clearGraphics()">Clear</button>
+            </div>
+        </div>
+
+        <div class='sCntr' data-dojo-attach-point="cntrAccts">
+            <label>Select Accounts within
+                <select id="selectedDistance" onchange="drawBuffer(this.value)">
+                    <option value="none" selected>Distance</option>
+                    <option value='1609.34'>One Mile</option>
+                    <option value='3218.69'>Two Miles</option>
+                    <option value='4828.03'>Three Miles</option>
+                    <option value='8046.72'>Five Miles</option>
+                </select> of the selected 'Leads'</label>
+
+            <div data-dojo-attach-point='resultAccts' class='resultAccts'>
+                <label data-dojo-attach-point='acctCountLbl'></label>
+            </div>
+        </div>
+    </div>
+    <div id="map">
+    </div>
+</body>
+
+</html>

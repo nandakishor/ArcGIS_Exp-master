@@ -1,0 +1,512 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no">
+    <title>Location Analytics POC</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/3.26/dijit/themes/tundra/tundra.css">
+    <link rel="stylesheet" href="https://js.arcgis.com/3.26/esri/css/esri.css">
+    <style>
+        html,
+        body {
+            height: 100%;
+            width: 100%;
+            margin: 0;
+            padding: 0;
+        }
+
+        #map {
+            margin: 0;
+            padding: 0;
+        }
+
+        .dds {
+            position: absolute;
+            right: 10px;
+            top: 10px;
+        }
+
+        .resultList>ul>li {
+            border-bottom: 1px solid #e3e6ec;
+            display: block;
+        }
+
+        .resultList>ul>li:hover svg {
+            fill: #2561a0;
+        }
+
+        .resultList>ul>li .titleTxt {
+            color: #54698d;
+        }
+
+        .popup__title {
+            font-weight: 500;
+            font-size: 1.0625rem;
+            line-height: 1.25;
+            color: #0070d2;
+            text-decoration: none;
+            margin-bottom: 0.25rem;
+            display: block;
+        }
+
+        .txt-sm .resultList>ul>li .titleTxt {
+            color: #000304;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .txt-sm {
+            color: #16325c;
+        }
+    </style>
+
+    <script src="https://ajax.googleapis.com/ajax/libs/jquery/3.3.1/jquery.min.js"></script>
+    <script type="text/javascript" src="lib/geostats.js"></script>
+    <script>
+        var dojoConfig = {
+            has: {
+                "esri-featurelayer-webgl": 1
+            }
+        }
+    </script>
+    <script src="https://js.arcgis.com/3.35/"></script>
+    <script>
+        // one global for persistent app variables
+        //var geostats = new geostats();
+        var app = {};
+        require([
+            "esri/map", "esri/basemaps",
+            "esri/layers/FeatureLayer", "esri/layers/VectorTileLayer",
+            "esri/request", "esri/config",
+            "esri/tasks/ClassBreaksDefinition",
+            "esri/symbols/SimpleFillSymbol", "esri/symbols/SimpleLineSymbol",
+            "esri/dijit/Legend",
+            "dojo/parser", "dojo/_base/array", "esri/Color", "dojo/dom-style",
+            "dojo/json", "dojo/dom",
+            "dojo/data/ItemFileReadStore",
+            "dijit/registry", "esri/SpatialReference", "esri/geometry/webMercatorUtils",
+            "esri/tasks/AlgorithmicColorRamp",
+            "esri/tasks/GenerateRendererParameters", "esri/tasks/GenerateRendererTask",
+            "esri/dijit/PopupTemplate",
+
+            "dijit/layout/BorderContainer", "dijit/layout/ContentPane", "dijit/form/FilteringSelect",
+            "dojo/domReady!"
+        ], function (
+            Map, BaseMap,
+            FeatureLayer, VectorTileLayer,
+            esriRequest, esriConfig,
+            ClassBreaksDefinition,
+            SimpleFillSymbol, SimpleLineSymbol,
+            Legend,
+            parser, arrayUtils, Color, domStyle,
+            JSON, dom,
+            ItemFileReadStore,
+            registry, SpatialReference, webMercatorUtils,
+            AlgorithmicColorRamp, GenerateRendererParameters,
+            GenerateRendererTask,
+            PopupTemplate) {
+            var darkGrayStyleURL = "https://www.arcgis.com/sharing/rest/content/items/57436c01bc754dbb87dfb636b6484022/resources/styles/root.json";
+            var lightGrayStyleURL = "https://www.arcgis.com/sharing/rest/content/items/1e47168d181248e491541ffd5a91c0de/resources/styles/root.json";
+            var customLightGrayStyleURL = "https://valgen.maps.arcgis.com/sharing/rest/content/items/c0cab3b9b12e46b8978332aa26ecedf5/resources/styles/root.json?f=pjson";
+
+            var vectorMap = new VectorTileLayer("https://basemaps.arcgis.com/v1/arcgis/rest/services/World_Basemap/VectorTileServer", {
+                id: "customLightGrayStyleURL",
+                visible: false
+            });
+
+            vectorMap.setStyle(customLightGrayStyleURL);
+            vectorMap.on("load", () => {
+                app.map.addLayer(vectorMap);
+            });
+
+            app.map = new Map("map", {
+                basemap: "streets-vector",
+                center: [-97.91016562499615, 39.504002205197395],
+                zoom: 4
+            });
+
+            app.spatialReference = new SpatialReference({ wkid: 4326 });
+
+            //app.layerURLs = { "state_layer": "https://sampleserver6.arcgisonline.com/arcgis/rest/services/USA/MapServer/2", "telephone_area_code_layer": "https://services2.arcgis.com/JoecHEvChY6qFe2m/arcgis/rest/services/USA_Telephone_Area_Codes/FeatureServer/0", "country_layer": "https://services2.arcgis.com/JoecHEvChY6qFe2m/arcgis/rest/services/World_Countries/FeatureServer/0" };
+
+            //app.layerURLs = { "state_layer": "https://sampleserver6.arcgisonline.com/arcgis/rest/services/USA/MapServer/2" };
+            app.layerURLs = { "state_layer": "https://services2.arcgis.com/JoecHEvChY6qFe2m/arcgis/rest/services/USA_States/FeatureServer/0" };
+            //app.layerURLs = { "state_layer": "https://services.arcgis.com/P3ePLMYs2RVChkJx/arcgis/rest/services/USA_States_analysis_trim/FeatureServer/0" };
+
+            //app.layerNames = ['USA_States', 'USA_Counties', 'USA_Telephone_Area_Codes', 'usa_zip5']
+            app.layerNames = ['usa_zip5']
+
+            //app.layerNames = [{ state_layer: "USA_States" }, { county_layer: "USA_Counties" }, { telephone_area_code_layer: "USA_Telephone_Area_Codes" }]
+
+            app.map.on("layers-add-result", function (results) {
+                //console.log(results)
+            });
+
+            app.sfs = new SimpleFillSymbol(SimpleFillSymbol.STYLE_SOLID,
+                new SimpleLineSymbol(SimpleLineSymbol.STYLE_DASHDOT,
+                    new Color([255, 0, 0]), 2), new Color([255, 255, 0, 0.25])
+            );
+
+            // colors for the renderer
+            app.defaultFrom = Color.fromHex("#998ec3");
+            app.defaultTo = Color.fromHex("#f1a340");
+
+            app.fieldList = [{
+                label: "Annual Revenue",
+                name: "Revenue",
+                owner: "user",
+                type: "CURRENCY"
+            }, {
+                label: "Employees",
+                name: "NumberOfEmployees",
+                owner: "user",
+                type: "INTEGER"
+            }, {
+                label: "Years",
+                name: "NumberOfYears",
+                owner: "user",
+                type: "INTEGER"
+            }]
+
+            function getBreaks(sLayer, sAttribute) {
+                sAttribute = selectedArryFun + selectedField
+                var sLayerGraphics = app.map.getLayer(sLayer).graphics
+                var breaksList = [];
+                for (var i = 0; i < sLayerGraphics.length; i++) {
+                    if (sAttribute in sLayerGraphics[i].attributes) {
+                        breaksList.push(sLayerGraphics[i].attributes[sAttribute]);
+                    }
+                }
+                return breaksList;
+            }
+
+            var selectedField = $("#updateField").val();
+            var selectedArryFun = $("#selectedArryFun").val()
+
+            var breakCount = 5;
+
+            //function to switch colors.
+            function switchColors() {
+                var r, g, b, rg, gb, rb;
+                var range = 255; // controls the range of r,g,b you would like
+                //reduce the range if you want more darker colors
+                var sep = range / 4; // controls the minimum separation for saturation
+                //note- keep sep < range/3 otherwise may crash browser due to performance
+                //reduce the sep if you do not mind pastel colors
+                //generate r,g,b, values as long as any difference is < separation
+                do {
+                    r = Math.floor(Math.random() * range);
+                    g = Math.floor(Math.random() * range);
+                    b = Math.floor(Math.random() * range);
+
+                    rg = Math.abs(r - g);
+                    gb = Math.abs(g - b);
+                    rb = Math.abs(r - b);
+                } while (rg < sep || gb < sep || rb < sep);
+
+                //convert the rgb to hex
+
+                function rgbtohex(rgb) {
+                    var first, second; // makes the two hex code for each rgb value
+
+                    first = Math.floor(rgb / 16); //get first unit of hex
+                    second = rgb % 16; //get second unit of hex
+                    // convert to string with hex base 16
+                    first = first.toString(16);
+                    second = second.toString(16);
+                    //concatenate the two units of the hex
+                    var rgbtohex = first + second;
+                    //return the two unit hex code for the r,g,b value
+                    return rgbtohex;
+                }
+
+                console.log('R: ' + r + ',  G: ' + g + ',  B: ' + b);
+
+                //convert the r,g,b numbers to hex code by calling the rgbto hex function
+                var r_str = rgbtohex(r),
+                    g_str = rgbtohex(g),
+                    b_str = rgbtohex(b);
+                //concatenate the final string for the output
+                var final = '#' + r_str + g_str + b_str;
+
+                //output random color
+                return final;
+            }
+
+            function getRenderer() {
+                var symbol = new SimpleFillSymbol();
+                symbol.setColor(new Color([150, 150, 150, 0.5]));
+                var renderer = new esri.renderer.ClassBreaksRenderer(symbol, selectedArryFun + selectedField);
+
+                if (selectedField) {
+                    var breaksList = getBreaks($("#selectedLayer").val(), selectedField);
+
+                    series = new geostats(breaksList);
+                    series.setPrecision(4);
+                    var a = series.getClassJenks(breakCount)
+                    var ranges = series.ranges
+                    series.doCount();
+                    var counter = series.counter
+
+                    console.log("Ranges: " + ranges);
+                    console.log("Count for range: " + counter);
+
+                    //var colors_VU = ['#7cfc00', '#ffff00', '#bebe00', '#006400', '#ff0000', '#ff4500', '#800000', '#FE2712', '#FD5308', '#FB9902', '#C60090', '#FE2712'];
+                    // Pastel colors
+                    var colors_VU = ['#FFE981', '#8BF18B', '#83B2FF', '#9B6EF3', '#FF555E', '#FF8650', '#091F93', '#FE2712', '#FD5308', '#FB9902', '#C60090'];
+
+                    for (var i = 0; i < ranges.length; i++) {
+                        var a = ranges[i].split('-');
+                        var a1 = parseFloat(a[0].trim()); var a2 = parseFloat(a[1].trim());
+                        renderer.addBreak(a1, a2, new SimpleFillSymbol().setColor(colors_VU[i]));
+                    }
+                }
+                return renderer;
+            }
+
+            // Request the geometry
+            app.geomParams = {
+                where: "1=1",
+                outFields: "*",
+                returnGeometry: true,
+                f: "json"
+            }
+
+            app.leadData = esriRequest({
+                url: "./data/leadData.json",
+                handleAs: "json"
+            });
+
+            async function getData() {
+                var data = []
+                for (var i = 0; i < app.layerNames.length; i++) {
+                    let url = "https://services2.arcgis.com/JoecHEvChY6qFe2m/ArcGIS/rest/services/" + app.layerNames[i] + "/FeatureServer/0/query/?where=FID%3E0&objectIds=&time=&geometry=&geometryType=esriGeometryEnvelope&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=none&f=pjson&token="
+                    console.log(url)
+                    //https://services2.arcgis.com/JoecHEvChY6qFe2m/ArcGIS/rest/services/usa_zip5/FeatureServer/0/query?where=STATE%3D%27CA%27&objectIds=&time=&geometry=&geometryType=esriGeometryPolygon&inSR=&spatialRel=esriSpatialRelIntersects&resultType=none&distance=0.0&units=esriSRUnit_Meter&returnGeodetic=false&outFields=*&returnGeometry=true&returnCentroid=false&featureEncoding=esriDefault&multipatchOption=xyFootprint&maxAllowableOffset=&geometryPrecision=&outSR=&datumTransformation=&applyVCSProjection=false&returnIdsOnly=false&returnUniqueIdsOnly=false&returnCountOnly=false&returnExtentOnly=false&returnQueryGeometry=false&returnDistinctValues=false&cacheHint=false&orderByFields=&groupByFieldsForStatistics=&outStatistics=&having=&resultOffset=&resultRecordCount=&returnZ=false&returnM=false&returnExceededLimitFeatures=true&quantizationParameters=&sqlFormat=standard&f=pjson&token=
+                    var newObj = {}
+                    try {
+                        var response = await fetch(url)
+                        var resData = await response.json()
+                        newObj[app.layerNames[i]] = resData
+                        data.push(newObj);
+                    } catch (err) {
+                        console.log('An error occurred while fetching this layerData.', err);
+                    }
+                }
+                return data
+            }
+
+            async function loadBoundaryLayers() {
+                //const layerData = await getData().then(urlData => console.log(urlData))
+                //for (const item of app.layerNames) { console.log(item) }
+                Object.keys(app.layerURLs).forEach(function (key) {
+                    var data2;
+                    $.ajax({
+                        dataType: "json",
+                        data: app.geomParams,
+                        url: app.layerURLs[key] + "/query/",
+                        success: function (data2) {
+                            console.log("Got data2", data2);
+                            if (data2.spatialReference.wkid != 4326) {
+                                data2.features.forEach(function (feature) {
+                                    feature.geometry = new esri.geometry.webMercatorToGeographic(new esri.geometry.Polygon(feature.geometry.rings));
+                                });
+                            }
+                            var geomData = checkInside(data2, app.leadData);
+                            console.log(geomData);
+
+                            var featureCollection = {
+                                layerDefinition: {
+                                    geometryType: geomData.geometryType,
+                                    spatialReference: app.spatialReference,
+                                    objectIdField: geomData.objectIdFieldName,
+                                    fields: geomData.fields,
+                                    drawingInfo: {
+                                        renderer: {
+                                            type: "simple",
+                                            symbol: app.sfs
+                                        }
+                                    }
+                                },
+                                featureSet: {
+                                    features: geomData.features,
+                                    geometryType: geomData.geometryType,
+                                    spatialReference: app.spatialReference
+                                }
+                            };
+
+                            var title = "${name}"
+                            var content = "<br><b>Number of Leads</b>: ${NumberOfLeads}" + "<br><b>Number of Years</b>: ${NumberOfYears}" + "<br><b> Revenue</b>: ${Revenue} $" + "<br><b>Number of Employees</b>: ${NumberOfEmployees}";
+                            var infoTemplate = new esri.InfoTemplate("", generateTemplateForInfoWindow);
+                            var featureLayer = new FeatureLayer(featureCollection, {
+                                id: key,
+                                infoTemplate: infoTemplate,
+                                opacity: 0.7,
+                                visible: updateVisibility(key)
+                            });
+                            //console.log(featureLayer.visible);
+                            featureLayer.setRenderer(getRenderer());
+                            featureLayer.on("mouse-over", onBoundaryHover);
+                            featureLayer.on("mouse-out", onMouseOut);
+                            app.map.addLayers([featureLayer]);
+                            //featureLayer.newExtent = getNewExtent(key);
+                        }
+                    });
+                });
+            }
+
+            function generateTemplateForInfoWindow(graphic) {
+                var html = '<div class="resultList">' + '<ul>';
+                html = html + '<li>' + '<a "target="_blank" class="popup__title">' + "State FIPS: " + graphic.attributes.STATE_FIPS + '</a> ';
+                //console.log(document.getElementById("selectedField").value);
+
+                if (document.getElementById("selectedField").value != "none") {
+                    Object.entries(graphic.attributes.infoDetails).forEach(function (key) {
+                        if (document.getElementById("selectedField").value == key[0])
+                            html = html + ' <div class="txt-sm">  ' + ' <span class="titleTxt">' + key[0] + ': </span>' + key[1] + ' </div>';
+                    });
+                }
+
+                html = html + '	</li> </ul>';
+                html = html + '</div> ';
+                return html;
+            }
+
+            function onBoundaryHover(evt) {
+                var g = evt.graphic;
+                app.map.infoWindow.setContent(g.getContent());
+                app.map.infoWindow.show(evt.screenPoint, app.map.getInfoWindowAnchor(evt.screenPoint));
+            }
+
+            function onMouseOut() {
+                app.map.infoWindow.hide();
+            }
+
+            function getNewExtent(sLayerID) {
+                var sLayer = app.map.getLayer(sLayerID)
+                var sLayerGraphics = sLayer.graphics;
+                var newExtent = new esri.geometry.Extent(sLayerGraphics[0].geometry.getExtent());
+                for (var i = 0; i < sLayerGraphics.length; i++) {
+                    var thisExtent = sLayerGraphics[i].geometry.getExtent();
+                    newExtent = newExtent.union(thisExtent);
+                }
+                if (sLayer.spatialReference.wkid != 102100) {
+                    newExtent = esri.geometry.geographicToWebMercator(newExtent)
+                }
+                return newExtent;
+            }
+
+            function updateVisibility(key) {
+                if ($("#selectedLayer").val() != key) {
+                    return false;
+                }
+                return true;
+            }
+
+            function checkInside(geometryData, data) {
+                var sObjectName = "Lead"
+                data = data.results[0];
+                for (var i = 0; i < geometryData.features.length; i++) {
+                    var dyVariables = {};
+                    var infoDetails = {};
+                    var count = 0;
+                    geometryData.features[i].attributes.infoDetails = infoDetails;
+                    for (var l = 0; l < app.fieldList.length; l++) {
+                        dyVariables[app.fieldList[l].name] = 0
+                    }
+                    for (var j = 0; j < data.length; j++) {
+                        if (new esri.geometry.Polygon(geometryData.features[i].geometry.rings).contains(new esri.geometry.Point(data[j].ValgencfMAPPdev__cfMappLongitude__c, data[j].ValgencfMAPPdev__cfMappLatitude__c), new esri.SpatialReference({ wkid: 4326 }))) {
+                            count += 1;
+                            for (var k = 0; k < app.fieldList.length; k++) {
+                                if (data[j].hasOwnProperty(app.fieldList[k].name)) {
+                                    dyVariables[app.fieldList[k].name] += data[j][app.fieldList[k].name]
+                                } else {
+                                    dyVariables[app.fieldList[k].name] += 0
+                                }
+                            }
+                        }
+                    }
+                    for (var m = 0; m < app.fieldList.length; m++) {
+                        var name = app.fieldList[m].name
+                        geometryData.features[i].attributes["Total " + name] = dyVariables[name];
+                        geometryData.features[i].attributes.infoDetails["Total " + name] = dyVariables[name];
+                        geometryData.features[i].attributes["Count of " + name] = count;
+                        geometryData.features[i].attributes.infoDetails["Count of " + name] = count;
+                        if (dyVariables[name] != 0) {
+                            geometryData.features[i].attributes["Average " + name] = dyVariables[name] / count;
+                            geometryData.features[i].attributes.infoDetails["Average " + name] = dyVariables[name] / count;
+                        } else {
+                            geometryData.features[i].attributes["Average " + name] = dyVariables[name];
+                            geometryData.features[i].attributes.infoDetails["Average " + name] = dyVariables[name];
+                        }
+                    }
+                    geometryData.features[i].attributes["Number of " + sObjectName] = count;
+                    geometryData.features[i].attributes.infoDetails["Number of " + sObjectName] = count;
+                    //console.log(geometryData.features[i])
+                }
+                return geometryData;
+            }
+
+            app.map.on("load", loadBoundaryLayers);
+
+            selectedLayer = function (selected) {
+                console.log(selected);
+                switch (selected) {
+                    case "state_layer":
+                        //app.map.getLayer("telephone_area_code_layer").setVisibility(false);
+                        app.map.getLayer("state_layer").setVisibility(true);
+                        //app.map.setExtent(app.map.getLayer("state_layer").newExtent)
+                        break;
+                    case "telephone_area_code_layer":
+                        app.map.getLayer("state_layer").setVisibility(false);
+                        //app.map.getLayer("telephone_area_code_layer").setVisibility(true);
+                        break;
+                    case "none":
+                        app.map.getLayer("state_layer").setVisibility(false);
+                        //app.map.getLayer("telephone_area_code_layer").setVisibility(false);
+                        break;
+                }
+            }
+
+            updateField = function (selected) {
+                selectedField = selected;
+                app.map.getLayer($("#selectedLayer").val()).setRenderer(getRenderer());
+                app.map.getLayer($("#selectedLayer").val()).redraw();
+            }
+
+            updateArryFun = function (selected) {
+                selectedArryFun = selected;
+                app.map.getLayer($("#selectedLayer").val()).setRenderer(getRenderer());
+                app.map.getLayer($("#selectedLayer").val()).redraw();
+            }
+
+        });
+    </script>
+</head>
+
+<body class="tundra">
+    <div id="map" style="Height:650px">
+    </div>
+    <select class="dds" id="selectedLayer" onchange="selectedLayer(this.value);">
+        <option value="none">Select Layer</option>
+        <!--<option value="country_layer">Country</option>-->
+        <option value="state_layer">State</option>
+        <!--<option value="telephone_area_code_layer">Telephone Area Code</option>-->
+    </select>
+    <select class="dds" id="selectedField" onchange="updateField(this.value);" style="top: 50px;">
+        <option value="none">Select Field</option>
+        <option value="NumberOfEmployees">Number Of Employees</option>
+        <!--<option value="NumberOfLeads">Number Of Leads</option>-->
+        <option value="NumberOfYears">Number Of Years</option>
+        <option value="Revenue">Revenue</option>
+    </select>
+    <select class="dds" id="selectedArryFun" onchange="updateArryFun(this.value);" style="top: 90px;">
+        <option value="Total " selected>Total</option>
+        <option value="Count of ">Count</option>
+        <option value="Average ">Average</option>
+    </select>
+</body>
+
+</html>

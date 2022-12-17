@@ -1,0 +1,191 @@
+<!DOCTYPE html>
+<html>
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Select by Point</title>
+    <link rel="stylesheet" href="https://js.arcgis.com/4.13/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.13/"></script>
+    <style>
+        html,
+        body,
+        #viewDiv {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+        }
+    </style>
+    <script>
+        require([
+            "esri/views/draw/Draw",
+            "esri/Map",
+            "esri/Graphic",
+            "esri/layers/GraphicsLayer",
+            "esri/layers/FeatureLayer",
+            "esri/geometry/Point",
+            "esri/geometry/Multipoint",
+            "esri/views/MapView",
+            "dojo/dom",
+            "dojo/domReady!",
+        ], function (
+            Draw,
+            Map,
+            Graphic,
+            GraphicsLayer,
+            FeatureLayer,
+            Point,
+            Multipoint,
+            MapView,
+            dom
+        ) {
+            const pntGraphics = new GraphicsLayer();
+            var renderer = {
+                type: "simple", // autocasts as new SimpleRenderer()
+                symbol: {
+                    type: "simple-fill", // autocasts as new SimpleFillSymbol()
+                    color: [255, 255, 255, 0.5],
+                    style: "none",
+                    outline: {
+                        // autocasts as new SimpleLineSymbol()
+                        color: "black",
+                        width: 1,
+                    },
+                },
+            };
+            const statesLyr = new FeatureLayer({
+                url: "https://services2.arcgis.com/JoecHEvChY6qFe2m/arcgis/rest/services/USA_States/FeatureServer/0",
+                renderer: renderer,
+                outFields: ["*"],
+            });
+            let drawPnt,
+                graphic,
+                ctrlKey = false,
+                highlight,
+                statesLyrView;
+            const map = new Map({
+                basemap: "streets-navigation-vector",
+                layers: [pntGraphics, statesLyr],
+            });
+            const view = new MapView({
+                container: "viewDiv",
+                map: map,
+                zoom: 4,
+                center: [-100, 39],
+            });
+            statesLyr.when(function () {
+                view.whenLayerView(statesLyr).then(function (layerView) {
+                    statesLyrView = layerView;
+                });
+            });
+            const draw = new Draw({
+                view: view,
+            });
+            var sym = {
+                type: "simple-marker",
+                style: "circle",
+                color: [0, 255, 255, 0.6],
+                size: "8px",
+                outline: {
+                    color: [0, 255, 255, 1],
+                    width: 1,
+                },
+            };
+            view.ui.add("point-button", "top-left");
+            document.getElementById("point-button").onclick = drawPoint;
+            function drawPoint() {
+                if (highlight) {
+                    highlight.remove();
+                }
+                const action = draw.create("point"); // Give a visual feedback to users as they move the pointer over the view
+                action.on("cursor-update", function (evt) {
+                    view.graphics.removeAll();
+                    drawPnt = new Point({
+                        x: evt.coordinates[0],
+                        y: evt.coordinates[1],
+                        spatialReference: view.spatialReference,
+                    });
+                    graphic = new Graphic({
+                        geometry: drawPnt,
+                        symbol: sym,
+                    });
+                    view.graphics.add(graphic);
+                    /*if (ctrlKey && !evt.native.ctrlKey) {
+                        draw.reset();
+                        view.graphics.removeAll();
+                        selectStates();
+                    }*/
+                });
+                action.on("draw-complete", function (evt) {
+                    if (evt.native.ctrlKey) {
+                        ctrlKey = true;
+                    } else {
+                        ctrlKey = false;
+                    }
+                    drawPnt = new Point({
+                        x: evt.coordinates[0],
+                        y: evt.coordinates[1],
+                        spatialReference: view.spatialReference,
+                    });
+                    graphic = new Graphic({
+                        geometry: drawPnt,
+                        symbol: sym,
+                    });
+                    pntGraphics.add(graphic);
+                    if (evt.native.ctrlKey) {
+                        drawPoint();
+                    } else {
+                        view.graphics.removeAll();
+                        selectStates();
+                    }
+                });
+                view.focus();
+            }
+            function selectStates() {
+                let mp = new Multipoint({
+                    spatialReference: view.spatialReference,
+                });
+                let pntArray = pntGraphics.graphics.map(function (gra) {
+                    mp.addPoint(gra.geometry);
+                });
+                const query = {
+                    geometry: mp,
+                    outFields: ["*"],
+                    outSpatialReference: view.spatialReference,
+                    returnGeometry: true,
+                };
+                // let query = statesLyr.createQuery();
+                // query.geometry = mp;
+                // query.outSpatialReference = view.spatialReference;
+                // query.returnGeometry = true;
+                statesLyr
+                    .queryFeatures(query)
+                    .then(function (results) {
+                        const graphics = results.features;
+                        // remove existing highlighted features
+                        if (highlight) {
+                            highlight.remove();
+                        } // highlight query results
+                        highlight = statesLyrView.highlight(graphics);
+                        console.log(graphics)
+                        pntGraphics.removeAll();
+                    })
+                    .catch(function (err) {
+                        console.error(err);
+                    });
+            }
+        });
+    </script>
+</head>
+
+<body>
+    <div id="viewDiv">
+        <div id="point-button" class="esri-widget esri-widget--button esri-interactive" title="Select Countries">
+            <span class="esri-icon-map-pin"></span>
+        </div>
+    </div>
+</body>
+
+</html>
+‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍‍

@@ -1,0 +1,90 @@
+html,
+body,
+.container,
+#map {
+    height: 100%;
+    width: 100%;
+    margin: 0;
+    padding: 0;
+}
+
+body {
+    background-color: #FFF;
+    overflow: hidden;
+    font-family: "Trebuchet MS";
+}
+
+#cntrlPanel {
+    z-index: 10000;
+    position: absolute;
+    right: 10px;
+}
+
+.cntrlPanel {
+
+    width: 500px;
+    position: absolute;
+    right: 25px;
+    top: 25px;
+    background-color: rgba(255, 255, 255, 0.75);
+    z-index: 101;
+}
+
+.sCntr {
+    padding: 10px;
+    text-align: center;
+}
+
+.resultLeads {
+    margin-top: 15px;
+}
+
+.resultLeads label {
+    padding-right: 5px;
+    font-style: italic;
+    color: #004DA8;
+}
+
+.resultAccts {
+    margin-top: 15px;
+}
+
+.resultAccts label {
+    padding-right: 5px;
+    font-style: italic;
+    color: #E64C00;
+}
+
+.resultList>ul>li {
+    border-bottom: 1px solid #e3e6ec;
+    display: block;
+}
+
+.resultList>ul>li:hover svg {
+    fill: #2561a0;
+}
+
+.resultList>ul>li .titleTxt {
+    color: #54698d;
+}
+
+.popup__title {
+    font-weight: 500;
+    font-size: 1.0625rem;
+    line-height: 1.25;
+    color: #0070d2;
+    text-decoration: none;
+    margin-bottom: 0.25rem;
+    display: block;
+}
+
+.txt-sm .resultList>ul>li .titleTxt {
+    color: #000304;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+.txt-sm {
+    color: #16325c;
+}

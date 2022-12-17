@@ -1,0 +1,417 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+    <meta name="viewport" content="initial-scale=1, maximum-scale=1,user-scalable=no" />
+    <title>Measure Distances</title>
+    <script>
+        var app = {};
+        async function getData(url) {
+            try {
+                var response = await fetch(url);
+                var resData = await response.json();
+            } catch (err) {
+                console.log("An error occurred while fetching this story.", err);
+            }
+            return resData;
+        }
+
+        async function getCSVData(url){
+            try{
+                var res = await fetch(url);
+                var resData = await res.text();
+            } catch(err){
+                console.log("An error occurred while fetching this story.", err);
+            }
+            return resData
+        }
+
+        function loadData(){
+            console.log('Loading Example Data ')
+            /*getData("./data/convertcsv.json").then(urlData => {
+                app.leadData = urlData
+                console.log('Lead records: ', app.leadData.length)
+            });
+            getData("./data/distancedata_example.json").then(urlData => {
+                app.racksData = urlData
+                console.log('Rack records: ', app.racksData.length)
+            });
+            getCSVData("./data/zipcode.csv").then(urlData => {
+                console.log('CSV parsed data: ', urlData.length)
+                app.zipcode = csvTojs(urlData)
+                console.log('Zip code records: ',app.zipcode[0])
+            });*/
+            getCSVData("./data/account_records.csv").then(urlData => {
+                console.log('CSV parsed data: ', urlData.length)
+                app.leadData = csvTojs(urlData)
+                console.log('Lead records: ',app.leadData[0])
+            });
+            getCSVData("./data/40k_records.csv").then(urlData => {
+                console.log('CSV parsed data: ', urlData.length)
+                app.racksData = csvTojs(urlData)
+                console.log('Rack records: ',app.racksData[0])
+            });
+        }
+
+        function CalDist(){
+            console.log(distance_a(41.91883, -72.47992, 42.25143814, -71.76773834) * 1.60934)
+            console.log(distance(41.91883, -72.47992, 42.25143814, -71.76773834))
+        }
+
+        function calculateDist(){
+            var leadlat = parseFloat(document.getElementById("leadLat").value)
+            var leadLon = parseFloat(document.getElementById("leadLon").value)
+            var racklat = parseFloat(document.getElementById("racklat").value)
+            var rackLon = parseFloat(document.getElementById("rackLon").value)
+            console.log(leadlat, leadLon, racklat, rackLon)
+            //console.log(distance_a(leadlat, leadLon, racklat, rackLon))
+            console.log(distance(leadlat, leadLon, racklat, rackLon))
+        }
+
+        function distance_a(lat1, lon1, lat2, lon2) {
+            if ((lat1 == lat2) && (lon1 == lon2)) {
+                return 0;
+            }
+            var p = 0.017453292519943295;    // Math.PI / 180
+            var c = Math.cos;
+            var a = 0.5 - c((lat2 - lat1) * p)/2 + c(lat1 * p) * c(lat2 * p) * (1 - c((lon2 - lon1) * p))/2;
+            var dist = 12742 * Math.asin(Math.sqrt(a));
+            return  dist.toFixed(2); // 2 * R; R = 6371 km
+          }
+
+        function distance(lat1, lon1, lat2, lon2, unit) {
+            
+            //metric KiloMeter lat1 41.91883 lon1 -72.47992 lat2 42.25143814 lon2 -71.76773834
+            //dist 69
+            var unit = 'K'
+            if ((lat1 == lat2) && (lon1 == lon2)) {
+                return 0;
+            }
+            else {
+                var radlat1 = Math.PI * lat1/180;
+                var radlat2 = Math.PI * lat2/180;
+                var theta = lon1-lon2;
+                var radtheta = Math.PI * theta/180;
+                var dist = Math.sin(radlat1) * Math.sin(radlat2) + Math.cos(radlat1) * Math.cos(radlat2) * Math.cos(radtheta);
+                if (dist > 1) {
+                    dist = 1;
+                }
+                dist = Math.acos(dist);     //console.log('ln 90 ', dist);
+                dist = dist * 180/Math.PI;  //console.log('ln 91 ', dist);
+                dist = dist * 60 * 1.1515;  //console.log('ln 92 ', dist);
+                if (unit=="K") { dist = dist * 1.609344 }
+                //if (unit=="N") { dist = dist * 0.8684 }
+                //console.log(lat1, lon1, lat2, lon2, dist)
+                return dist;
+            }
+        }
+
+        function compareValues(key, order = 'asc') {
+            return function innerSort(a, b) {
+                if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) {
+                    return 0;
+                }
+                const varA = (typeof a[key] === 'string')
+                    ? a[key].toUpperCase() : a[key];
+                const varB = (typeof b[key] === 'string')
+                    ? b[key].toUpperCase() : b[key];
+    
+                let comparison = 0;
+                if (varA > varB) {
+                    comparison = 1;
+                } else if (varA < varB) {
+                    comparison = -1;
+                }
+                return (
+                    (order === 'desc') ? (comparison * -1) : comparison
+                );
+            };
+        }
+
+        function csvTojs(csv) {
+            var lines = csv.split("\n");
+            var result = [];
+            var headers = lines[0].split(",");
+
+            for (var i = 1; i < lines.length; i++) {
+                var obj = {};
+
+                var row = lines[i],
+                    queryIdx = 0,
+                    startValueIdx = 0,
+                    idx = 0;
+
+                if (row.trim() === '') { continue; }
+
+                while (idx < row.length) {
+                    /* if we meet a double quote we skip until the next one */
+                    var c = row[idx];
+
+                    if (c === '"') {
+                        do { c = row[++idx]; } while (c !== '"' && idx < row.length - 1);
+                    }
+
+                    if (c === ',' || /* handle end of line with no comma */ idx === row.length - 1) {
+                        /* we've got a value */
+                        var value = row.substr(startValueIdx, idx - startValueIdx).trim();
+
+                        /* skip first double quote */
+                        if (value[0] === '"') { value = value.substr(1); }
+                        /* skip last comma */
+                        if (value[value.length - 1] === ',') { value = value.substr(0, value.length - 1); }
+                        /* skip last double quote */
+                        if (value[value.length - 1] === '"') { value = value.substr(0, value.length - 1); }
+
+                        var key = headers[queryIdx++];
+                        if (value) {
+                            obj[key] = value;
+                        } else {
+                            obj[key] = null
+                        }
+                        startValueIdx = idx + 1;
+                    }
+
+                    ++idx;
+                }
+                Object.keys(obj).forEach(function(key) {
+                    key.toString().trim();
+                })
+                result.push(obj);
+            }
+            return result;
+            //loadLayers(result, objName)
+        }
+
+        function getDistance() {
+            app.result = []
+            app.tempLeadData = JSON.parse(JSON.stringify(app.leadData));
+            for (var i = 0; i < app.leadData.length; i++) {
+                var tempracksData = JSON.parse(JSON.stringify(app.racksData));
+                for (var j = 0; j < app.racksData.length; j++) {   
+                    if (app.leadData[i]["PV Latitude"] != null && app.leadData[i]["PV Longitude"] != null && app.racksData[j].Latitude != null && app.racksData[j].Longitude != null) {
+                        //var dist = distance(app.leadData[i]["PV Latitude"], app.leadData[i]["PV Longitude"], app.racksData[j].Latitude, app.racksData[j].Longitude)
+                        var dist = distance(parseFloat(app.leadData[i]["PV Latitude"]), parseFloat(app.leadData[i]["PV Longitude"]), parseFloat(app.racksData[j].Latitude), parseFloat(app.racksData[j].Longitude))
+                        tempracksData[j]["Distance"] = dist
+                        //console.log(app.racksData[j]["Rack Name"], dist)
+                    }
+                }
+                var sorted = tempracksData.sort(compareValues("Distance"))
+                /*app.tempLeadData[i]["Nearest Rack"] = sorted[0]["Rack Name"]
+                app.tempLeadData[i]["Nearest Rack ID"] = sorted[0]["Rack ID"]
+                app.tempLeadData[i]["Nearest Rack Distance"] = sorted[0]["Distance"]
+                app.tempLeadData[i]["Nearest Rack Latitude"] = sorted[0]["Latitude"]
+                app.tempLeadData[i]["Nearest Rack Longitude"] = sorted[0]["Longitude"]
+                app.tempLeadData[i]["Nearest Rack 2"] = sorted[1]["Rack Name"]
+                app.tempLeadData[i]["Nearest Rack ID 2"] = sorted[1]["Rack ID"]
+                app.tempLeadData[i]["Nearest Rack Distance 2"] = sorted[1]["Distance"]
+                app.tempLeadData[i]["Nearest Rack Latitude 2"] = sorted[1]["Latitude"]
+                app.tempLeadData[i]["Nearest Rack Longitude 2"] = sorted[1]["Longitude"]
+                app.tempLeadData[i]["Nearest Rack 3"] = sorted[2]["Rack Name"]
+                app.tempLeadData[i]["Nearest Rack ID 3"] = sorted[2]["Rack ID"]
+                app.tempLeadData[i]["Nearest Rack Distance 3"] = sorted[2]["Distance"]
+                app.tempLeadData[i]["Nearest Rack Latitude 3"] = sorted[2]["Latitude"]
+                app.tempLeadData[i]["Nearest Rack Longitude 3"] = sorted[2]["Longitude"]
+                app.tempLeadData[i]["Nearest Rack 4"] = sorted[3]["Rack Name"]
+                app.tempLeadData[i]["Nearest Rack ID 4"] = sorted[3]["Rack ID"]
+                app.tempLeadData[i]["Nearest Rack Distance 4"] = sorted[3]["Distance"]
+                app.tempLeadData[i]["Nearest Rack Latitude 4"] = sorted[3]["Latitude"]
+                app.tempLeadData[i]["Nearest Rack Longitude 4"] = sorted[3]["Longitude"]
+                app.tempLeadData[i]["Nearest Rack 5"] = sorted[4]["Rack Name"]
+                app.tempLeadData[i]["Nearest Rack ID 5"] = sorted[4]["Rack ID"]
+                app.tempLeadData[i]["Nearest Rack Distance 5"] = sorted[4]["Distance"]
+                app.tempLeadData[i]["Nearest Rack Latitude 5"] = sorted[4]["Latitude"]
+                app.tempLeadData[i]["Nearest Rack Longitude 5"] = sorted[4]["Longitude"]
+                app.result.push(app.tempLeadData[i])*/
+                console.log(i)
+            }
+            console.log("Calculated Distance: app.result")
+        }
+        
+        /*function getDistance() {
+            app.result = []
+            app.tempLeadData = JSON.parse(JSON.stringify(app.leadData));
+            for (var i = 0; i < 10; i++) {
+                let tempracksData = JSON.parse(JSON.stringify(app.racksData));
+                for (var j = 0; j < app.racksData.length; j++) {   
+                    if (app.leadData[i].Latitude__c != null && app.leadData[i].Longitude__c != null && app.racksData[j].New_Latitude != null && app.racksData[j].New_Longitude != null) {
+                        var dist = distance(app.leadData[i].Latitude__c, app.leadData[i].Longitude__c, app.racksData[j].New_Latitude, app.racksData[j].New_Longitude)
+                        tempracksData[j]["Distance"] = dist
+                    }
+                }
+                var sorted = tempracksData.sort(compareValues("Distance"))
+                app.tempLeadData[i]["Nearest Rack"+" 1"] = sorted[0]["Company_Account"].replace(",", ".")
+                app.tempLeadData[i]["Nearest Rack Distance"+" 1"] = sorted[0]["Distance"]
+                app.tempLeadData[i]["Nearest Rack"+" 2"] = sorted[1]["Company_Account"].replace(",", ".")
+                app.tempLeadData[i]["Nearest Rack Distance"+" 2"] = sorted[1]["Distance"]
+                app.tempLeadData[i]["Nearest Rack"+" 3"] = sorted[2]["Company_Account"].replace(",", ".")
+                app.tempLeadData[i]["Nearest Rack Distance"+" 3"] = sorted[2]["Distance"]
+                app.tempLeadData[i]["Nearest Rack"+" 4"] = sorted[3]["Company_Account"].replace(",", ".")
+                app.tempLeadData[i]["Nearest Rack Distance"+" 4"] = sorted[3]["Distance"]
+                app.result.push(app.tempLeadData[i])
+                console.log(i)
+            }
+            console.log("Calculated Distance: app.result")
+        }*/
+
+        /*function getDistanceFromZip(){
+            app.result = []
+            app.tempLeadData = JSON.parse(JSON.stringify(app.leadData));
+            for (var i = 0; i < 10; i++) {
+                var leadRec = app.zipcode.filter(obj => { return obj.Zip === app.leadData[i].ZipCode.toString()})
+                let tempracksData = JSON.parse(JSON.stringify(app.racksData));
+                for (var j = 0; j < app.racksData.length; j++) {
+                    var rackRec = app.zipcode.filter(obj => { return obj.Zip === app.racksData[j].New_Zip.toString()})
+                    if (leadRec[0].Latitude != null && leadRec[0].Longitude != null && rackRec[0].Latitude != null && rackRec[0].Longitude != null) {
+                        var dist = distance(parseFloat(leadRec[0].Latitude), parseFloat(leadRec[0].Longitude), parseFloat(rackRec[0].Latitude), parseFloat(rackRec[0].Longitude))
+                        tempracksData[j]["Distance"] = dist
+                    }
+                }
+                var sorted = tempracksData.sort(compareValues("Distance"))
+                app.tempLeadData[i]["Nearest Rack"] = sorted[0]["Company_Account"].replace(",", ".")
+                app.tempLeadData[i]["Nearest Rack Distance"] = sorted[0]["Distance"]
+                app.result.push(app.tempLeadData[i])
+                console.log(i)
+            }
+            console.log("Calculated Distance: app.result")
+        }*/
+
+        function getDistanceFromZip(){
+            app.result = []
+            app.tempLeadData = JSON.parse(JSON.stringify(app.sampleData));
+            for (var i = 0; i < app.sampleData.length; i++) {
+                console.log(i, app.sampleData[i].LeadsZip.toString())
+                var leadRec = app.zipcode.filter(obj => { return obj.Zip === app.sampleData[i].LeadsZip.toString()})
+                let tempracksData = JSON.parse(JSON.stringify(app.racksData));
+                for (var j = 0; j < app.racksData.length; j++) {
+                    var rackRec = app.zipcode.filter(obj => { return obj.Zip === app.racksData[j].RackZip.toString()})
+                    if (leadRec[0].Latitude != null && leadRec[0].Longitude != null && rackRec[0].Latitude != null && rackRec[0].Longitude != null) {
+                        var dist = distance(parseFloat(leadRec[0].Latitude), parseFloat(leadRec[0].Longitude), parseFloat(rackRec[0].Latitude), parseFloat(rackRec[0].Longitude))
+                        tempracksData[j]["Distance"] = dist
+                    }
+                }
+                var sorted = tempracksData.sort(compareValues("Distance"))
+                app.tempLeadData[i]["Nearest Rack"] = sorted[0]["Rack"].replace(",", ".")
+                app.tempLeadData[i]["Nearest Rack Distance"] = sorted[0]["Distance"]
+                app.result.push(app.tempLeadData[i])
+                console.log(i)
+            }
+            console.log("Calculated Distance: app.result")
+        }
+
+        function jsontocsv() {
+            var array = typeof app.result != 'object' ? JSON.parse(app.result) : app.result;
+            var str = '';
+            for (var i = 0; i < array.length; i++) {
+                var line = '';
+                for (var index in array[i]) {
+                    if (line != '') line += ','
+                    line += array[i][index];
+                }
+                str += line + '\r\n';
+            }
+            //return str;
+            console.log(str)
+        }
+
+        function convertToCSV(sObjName, sFileName, sRecords, sFields) {
+            var csv
+            var fields = []
+            var fieldsN = []
+            var records = []
+            var arr = ["$$hashKey", "checked"]
+            var dateFields = [];
+    
+            $scope.sObjectDataTables[sObjName].sObjectFields.forEach((ele, index) => {
+                if (ele.type === 'DATETIME' || ele.type === 'DATE') {
+                    dateFields.push({ 'name': ele.name, 'type': ele.type });
+                }
+            });
+    
+            sFields.forEach(function(item) {
+                if (!item.isInput) {
+                    fields.push(item.name)
+                    fieldsN.push(item.label)
+                }
+            })
+    
+            fields = fields.filter(item => !arr.includes(item))
+            fieldsN = fieldsN.filter(item => !arr.includes(item))
+    
+            sRecords.forEach(function(key) {
+                var record = {}
+                Object.entries(key).forEach(function(item) {
+                    if (!item[1].isInput) {
+                        if (item[1].hasOwnProperty('value')) {
+                            record[item[0]] = item[1].value
+                        } else {
+                            record[item[0]] = null
+                        }
+                    }
+                })
+                records.push(record)
+            })
+    
+            var replacer = function(key, value) {
+                return value === null ? '' : value;
+            };
+    
+            var filterValue = function(key, value) {
+                if (dateFields.length > 0) {
+                    for (var i = 0; i < dateFields.length; i++) {
+                        if (key === dateFields[i].name) {
+                            return value === null ? '' : $scope.showDataValueByFieldDataType(value, dateFields[i].type)
+                        } else {
+                            return value === null ? '' : value
+                        }
+                    }
+                } else {
+                    return value === null ? '' : value
+                }
+            }
+    
+            fields.unshift("id")
+            fieldsN.unshift("id")
+    
+            csv = Object.values(Object.values(records)).map(row =>
+                fields
+                .map(fieldName => JSON.stringify(filterValue(fieldName, row[fieldName]), replacer))
+                .join(';')
+            )
+            csv.unshift(fieldsN.join(';'));
+            csv = csv.join('\r\n');
+            var link = window.document.createElement('a');
+            link.setAttribute("href", "data:text/csv;charset=utf-8," + encodeURI(csv));
+            link.setAttribute("download", 'sFileName' + '.csv');
+            link.click();
+        }
+
+        function objToCsv() {
+            const headers = Object.keys(app.result[0]).join(',');
+            const content = app.result.map(r => Object.values(r).join(','));
+            //return [headers].concat(content).join("\n");
+            console.log([headers].concat(content).join("\n"))
+        }
+    </script>
+  </head>
+  <body>
+    <div>
+        <h1>Nearest Rack Record</h1>
+        <button onclick="loadData()">Load Data</button>
+        <button onclick="getDistance()">Get Distance</button>
+        <button onclick="getDistanceFromZip()">Get Distance form Zip</button>
+        <button onclick="objToCsv()">Get Result</button>
+        <button onclick="CalDist()">Get Distance</button>
+    </div>
+    <div>
+        <label for="leadLat">Lead Lat:</label>
+        <input type="text" id="leadLat" name="leadLat"><br><br>
+        <label for="leadLon">Lead Lon:</label>
+        <input type="text" id="leadLon" name="leadLon"><br><br>
+        <label for="racklat">Rack Lat:</label>
+        <input type="text" id="racklat" name="racklat"><br><br>
+        <label for="rackLon">Rack Lon:</label>
+        <input type="text" id="rackLon" name="rackLon"><br><br>
+        <button onclick="calculateDist()">Calculate Distance</button>
+    </div>
+  </body>
+</html>

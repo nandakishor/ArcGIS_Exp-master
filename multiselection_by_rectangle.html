@@ -1,0 +1,173 @@
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Select features by rectangle</title>
+
+    <link rel="stylesheet" href="https://js.arcgis.com/4.19/esri/themes/light/main.css" />
+    <script src="https://js.arcgis.com/4.19/"></script>
+    <style>
+      html,
+      body {
+        padding: 0;
+        margin: 0;
+        height: 100%;
+        width: 100%;
+      }
+
+      #viewDiv {
+        height: 90%;
+        width: 100%;
+      }
+    </style>
+
+    <script>
+      require([
+        "esri/Map",
+        "esri/views/MapView",
+        "esri/layers/CSVLayer",
+        "esri/layers/FeatureLayer",
+        "esri/layers/GraphicsLayer",
+        "esri/widgets/Sketch/SketchViewModel",
+        "esri/Graphic",
+        "esri/Basemap",
+        "esri/geometry/geometryEngineAsync"
+      ], function (
+        Map,
+        MapView,
+        CSVLayer,
+        FeatureLayer,
+        GraphicsLayer,
+        SketchViewModel,
+        Graphic,
+        Basemap, geometryEngineAsync
+      ) {
+
+        // national parks csv layer
+        const csvLayer = new CSVLayer({
+          url: "https://ubatsukh.github.io/arcgis-js-api-demos/devsummit2021/csvLayer-nps/data/nps_establishments.csv",
+          delimiter: ",",
+          popupTemplate: {
+            title: "{unit_name}",
+            content:
+              "Established on <b>{date_est}</b> <br/><br/> {description}"
+          }          
+        });
+
+        let csvLayerView;
+        csvLayer.when(() => {
+          view.whenLayerView(csvLayer).then(function (layerView) {
+            csvLayerView = layerView;
+          });
+        })
+        .catch(errorCallback);
+
+        const map = new Map({
+            basemap: "streets-navigation-vector",
+            layers: [csvLayer]
+        });
+
+        // initialize the view with USA Contiguous Albers Equal Area Conic
+        // projection and set the extent to the states
+        const view = new MapView({
+          container: "viewDiv",
+          map: map,
+          zoom: 4,
+          center: [-100, 39],
+        });
+
+        // this array will keep track of selected feature objectIds to
+        // sync the layerview effects and feature table selection
+        let features = [];
+
+        // polygonGraphicsLayer will be used by the sketchviewmodel
+        // show the polygon being drawn on the view
+        const polygonGraphicsLayer = new GraphicsLayer();
+        map.add(polygonGraphicsLayer);
+
+        // add the select by rectangle button the view
+        view.ui.add("select-by-rectangle", "top-left");
+        const selectButton = document.getElementById("select-by-rectangle");
+
+        // click event for the select by rectangle button
+        selectButton.addEventListener("click", () => {
+          view.popup.close();
+          clearSelection()
+          sketchViewModel.create("rectangle");
+        });
+
+        // add the clear selection button the view
+        view.ui.add("clear-selection", "top-left");
+        const clearButton = document.getElementById("clear-selection");
+
+        clearButton.addEventListener("click", () => {
+            clearSelection()
+        });
+
+        function clearSelection(){
+            polygonGraphicsLayer.removeAll();
+        }
+
+        // create a new sketch view model set its layer
+        const sketchViewModel = new SketchViewModel({
+          view: view,
+          layer: polygonGraphicsLayer
+        });
+
+        // Once user is done drawing a rectangle on the map
+        // use the rectangle to select features on the map and table
+        sketchViewModel.on("create", async (event) => {
+          if (event.state === "complete") {
+            // this polygon will be used to query features that intersect it
+            const geometries = polygonGraphicsLayer.graphics.map(function(graphic){
+              return graphic.geometry
+            });
+            const queryGeometry = await geometryEngineAsync.union(geometries.toArray());
+            selectFeatures(queryGeometry);
+          }
+        });
+
+        // This function is called when user completes drawing a rectangle
+        // on the map. Use the rectangle to select features in the layer and table
+        function selectFeatures(geometry) {
+          if (csvLayerView) {
+            // create a query and set its geometry parameter to the
+            // rectangle that was drawn on the view
+            const query = {
+              geometry: geometry,
+              outFields: ["*"]
+            };
+
+            // query graphics from the csv layer view. Geometry set for the query
+            // can be polygon for point features and only intersecting geometries are returned
+            csvLayerView.queryFeatures(query)
+              .then((results) => {
+                if (results.features.length === 0) {
+                    clearSelection();
+                } else {
+                    console.log(results.features)
+                }
+              })
+              .catch(errorCallback);
+          }
+        }
+
+        function errorCallback(error) {
+          console.log("error happened:", error.message);
+        }
+      });
+    </script>
+  </head>
+
+  <body>
+    <div id="viewDiv"></div>
+    <div id="select-by-rectangle" class="esri-widget esri-widget--button esri-widget esri-interactive"
+        title="Select features by rectangle">
+      <span class="esri-icon-checkbox-unchecked"></span>
+    </div>
+    <div id="clear-selection" class="esri-widget esri-widget--button esri-widget esri-interactive"
+        title="Clear selection">
+      <span class="esri-icon-erase"></span>
+    </div>
+  </body>
+</html>

@@ -1,0 +1,160 @@
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta http-equiv="X-UA-Compatible" content="IE=edge">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nearest Distance</title>
+    <script>
+        var app = {}
+
+        function loadData(){
+            getCSVData("./data/Account.csv").then(urlData => {
+                console.log('CSV parsed data: ', urlData.length)
+                app.nearestObjectData = csvTojs(urlData)
+                console.log('Records: ',app.nearestObjectData[0])
+            });
+
+            getCSVData("./data/Contact.csv").then(urlData => {
+                app.nearestAroundObjectData = csvTojs(urlData)
+                console.log('Records: ',app.nearestAroundObjectData[0])
+            });
+        }
+
+        async function getCSVData(url){
+            try{
+                var res = await fetch(url);
+                var resData = await res.text();
+            } catch(err){
+                console.log("An error occurred while fetching this story.", err);
+            }
+            return resData
+        }
+
+        function distance(objLat, objLong, aroundObjLat, aroundObjLong){
+            unit = 'M' // 'K'
+            if ((objLat == aroundObjLat) && (objLong == aroundObjLong)) {
+                return 0;
+            }
+            else {
+                var radobjLat = Math.PI * objLat/180;
+                var radaroundObjLat = Math.PI * aroundObjLat/180;
+                var theta = objLong-aroundObjLong;
+                var radtheta = Math.PI * theta/180;
+                var dist = Math.sin(radobjLat) * Math.sin(radaroundObjLat) + Math.cos(radobjLat) * Math.cos(radaroundObjLat) * Math.cos(radtheta);
+                if (dist > 1) {
+                    dist = 1;
+                }
+                dist = Math.acos(dist);     //console.log('ln 90 ', dist);
+                dist = dist * 180/Math.PI;  //console.log('ln 91 ', dist);
+                dist = dist * 60 * 1.1515;  //console.log('ln 92 ', dist);
+                if (unit=="K") { dist = dist * 1.609344 }
+                //console.log(objLat, objLong, aroundObjLat, aroundObjLong, dist)
+                return dist;
+            }
+        }
+
+        function calculateDistance() {
+            var resultt = []
+            var tempNearestObjectRecords = JSON.parse(JSON.stringify(app.nearestObjectData))
+            for (let i = 0; i < tempNearestObjectRecords.length; i++) {
+                var newObj = {}
+                var tempAroundObjectRecords = JSON.parse(JSON.stringify(app.nearestAroundObjectData))
+                for (let j = 0; j < 5; j++) {
+                    var dist = distance(parseFloat(tempNearestObjectRecords[i].ValgenDev__cfMappLatitude__c), parseFloat(tempNearestObjectRecords[i].ValgenDev__cfMappLongitude__c), parseFloat(tempAroundObjectRecords[j].ValgenDev__cfMappLatitude__c), parseFloat(tempAroundObjectRecords[j].ValgenDev__cfMappLongitude__c))
+                    tempAroundObjectRecords[j]['Distance'] = dist
+                }
+                var sorted = tempAroundObjectRecords.sort(compareValues("Distance"))
+                newObj['Id'] = tempNearestObjectRecords[i]['AccountId']
+                newObj['Nearest Object Id'] = sorted[0]['ContactId']
+                newObj['Nearest Object Name'] = sorted[0]['FullName']
+                newObj['Nearest Object Distance'] = Math.round(sorted[0]['Distance'])
+                resultt.push(newObj);
+            }
+            console.log(resultt);
+            //return resultt;
+        }
+
+        function csvTojs(csv) {
+            var lines = csv.split("\n");
+            var result = [];
+            var headers = lines[0].split(",");
+
+            for (var i = 1; i < lines.length; i++) {
+                var obj = {};
+
+                var row = lines[i],
+                    queryIdx = 0,
+                    startValueIdx = 0,
+                    idx = 0;
+
+                if (row.trim() === '') { continue; }
+
+                while (idx < row.length) {
+                    /* if we meet a double quote we skip until the next one */
+                    var c = row[idx];
+
+                    if (c === '"') {
+                        do { c = row[++idx]; } while (c !== '"' && idx < row.length - 1);
+                    }
+
+                    if (c === ',' || /* handle end of line with no comma */ idx === row.length - 1) {
+                        /* we've got a value */
+                        var value = row.substr(startValueIdx, idx - startValueIdx).trim();
+
+                        /* skip first double quote */
+                        if (value[0] === '"') { value = value.substr(1); }
+                        /* skip last comma */
+                        if (value[value.length - 1] === ',') { value = value.substr(0, value.length - 1); }
+                        /* skip last double quote */
+                        if (value[value.length - 1] === '"') { value = value.substr(0, value.length - 1); }
+
+                        var key = headers[queryIdx++];
+                        if (value) {
+                            obj[key] = value;
+                        } else {
+                            obj[key] = null
+                        }
+                        startValueIdx = idx + 1;
+                    }
+
+                    ++idx;
+                }
+                Object.keys(obj).forEach(function(key) {
+                    key.toString().trim();
+                })
+                result.push(obj);
+            }
+            return result;
+        }
+
+        function compareValues(key, order = 'asc') {
+            return function innerSort(a, b) {
+                if (!a.hasOwnProperty(key) || !b.hasOwnProperty(key)) {
+                    return 0;
+                }
+                const varA = (typeof a[key] === 'string')
+                    ? a[key].toUpperCase() : a[key];
+                const varB = (typeof b[key] === 'string')
+                    ? b[key].toUpperCase() : b[key];
+    
+                let comparison = 0;
+                if (varA > varB) {
+                    comparison = 1;
+                } else if (varA < varB) {
+                    comparison = -1;
+                }
+                return (
+                    (order === 'desc') ? (comparison * -1) : comparison
+                );
+            };
+        }
+    </script>
+</head>
+<body>
+    <div>
+        <h1>Nearest Record Calculation</h1>
+        <button onclick="loadData()">Load Data</button>
+        <button onclick="calculateDistance()">Calculate Distance</button>
+    </div>
+</body>
+</html>
