@@ -41,12 +41,12 @@
                 app.zipcode = csvTojs(urlData)
                 console.log('Zip code records: ',app.zipcode[0])
             });*/
-            getCSVData("./data/account_records.csv").then(urlData => {
+            getCSVData("./data/sampleLead.csv").then(urlData => {
                 console.log('CSV parsed data: ', urlData.length)
                 app.leadData = csvTojs(urlData)
                 console.log('Lead records: ',app.leadData[0])
             });
-            getCSVData("./data/40k_records.csv").then(urlData => {
+            getCSVData("./data/smapleRack.csv").then(urlData => {
                 console.log('CSV parsed data: ', urlData.length)
                 app.racksData = csvTojs(urlData)
                 console.log('Rack records: ',app.racksData[0])
